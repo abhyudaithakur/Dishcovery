@@ -132,7 +132,7 @@ if 'selected_recipe' not in st.session_state:
 
 # --- LOAD MODELS ---
 @st.cache_resource
-def load_detection_model(model_path='trained_model.h5', labels_path='Labels.txt'):
+def load_detection_model(model_path='trained_model.h5', labels_path='labels.txt'):
     model = tf.keras.models.load_model(model_path)
     with open(labels_path) as f:
         labels = [l.strip() for l in f]
