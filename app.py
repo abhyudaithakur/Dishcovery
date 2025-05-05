@@ -45,35 +45,104 @@ page_bg = """
     text-shadow: 1px 1px 3px rgba(255, 255, 255, 0.5);
 }
 
-.recipe-content { margin-bottom:1.5rem; padding:1.5rem; background-color: rgba(255,255,255,0.7); border-radius:15px; }
-.recipe-divider { border:0; height:2px; background-image: linear-gradient(to right, rgba(0,0,0,0), rgba(106,90,122,0.75), rgba(0,0,0,0)); margin:2rem 0; }
-[data-testid="stTextInput"] input { background-color: rgba(255,255,255,0.8) !important; border-radius:10px; }
-[data-testid="stSlider"] { background-color: transparent !important; border: none !important; box-shadow: none !important; }
-div[data-testid="stHorizontalBlock"] { display:flex; justify-content:center; }
-.st-emotion-cache-16idsys p { color: #663c00 !important; font-weight:bold !important; background-color: rgba(255,237,160,0.9) !important; padding:0.5rem !important; border-radius:5px !important; }
-.st-emotion-cache-r421ms p { color: #2c5282 !important; font-weight:bold !important; background-color: rgba(235,248,255,0.9) !important; padding:0.5rem !important; border-radius:5px !important; }
-.recipe-content ol, .recipe-content ul { background-color: rgba(255,255,255,0.8); padding:1rem 1rem 1rem 2rem; border-radius:5px; }
-.recipe-button { background-color: rgba(255,255,255,0.8); border-radius:10px; padding:10px; margin:5px 0; transition: all 0.3s ease; }
-.recipe-button:hover { background-color: rgba(235,248,255,0.9); transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+/* Recipe content styling */
+.recipe-content {
+    margin-bottom: 1.5rem;
+    padding: 1rem 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 15px;
+    padding: 1.5rem;
+}
+
+/* Recipe divider styling */
+.recipe-divider {
+    border: 0;
+    height: 2px;
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(106, 90, 122, 0.75), rgba(0, 0, 0, 0));
+    margin: 2rem 0;
+}
+
+/* Improve input field visibility */
+[data-testid="stTextInput"] input {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    border-radius: 10px;
+}
+
+/* Remove slider card block */
+[data-testid="stSlider"] {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Center button styling */
+div[data-testid="stHorizontalBlock"] {
+    display: flex;
+    justify-content: center;
+}
+
+/* Improve warning visibility */
+.st-emotion-cache-16idsys p {
+    color: #663c00 !important;
+    font-weight: bold !important;
+    background-color: rgba(255, 237, 160, 0.9) !important;
+    padding: 0.5rem !important;
+    border-radius: 5px !important;
+}
+
+/* Improve info visibility */
+.st-emotion-cache-r421ms p {
+    color: #2c5282 !important;
+    font-weight: bold !important;
+    background-color: rgba(235, 248, 255, 0.9) !important;
+    padding: 0.5rem !important;
+    border-radius: 5px !important;
+}
+
+/* Make instructions more readable */
+.recipe-content ol, .recipe-content ul {
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 1rem 1rem 1rem 2rem;
+    border-radius: 5px;
+}
+
+/* Recipe selection button styling */
+.recipe-button {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 10px;
+    padding: 10px;
+    margin: 5px 0;
+    transition: all 0.3s ease;
+}
+
+.recipe-button:hover {
+    background-color: rgba(235, 248, 255, 0.9);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
 </style>
 """
 st.markdown(page_bg, unsafe_allow_html=True)
 
 # --- SESSION STATE ---
-if 'results' not in st.session_state: st.session_state.results = None
-if 'selected_recipe' not in st.session_state: st.session_state.selected_recipe = None
+if 'results' not in st.session_state:
+    st.session_state.results = None
+if 'selected_recipe' not in st.session_state:
+    st.session_state.selected_recipe = None
 
 # --- LOAD MODELS ---
 @st.cache_resource
-def load_detection_model(model_path='trained_model.h5', labels_path='labels.txt'):
+def load_detection_model(model_path='trained_model.h5', labels_path='Labels.txt'):
     model = tf.keras.models.load_model(model_path)
-    with open(labels_path) as f: labels = [l.strip() for l in f]
+    with open(labels_path) as f:
+        labels = [l.strip() for l in f]
     return model, labels
 
 @st.cache_resource
 def load_recommender(recipes_path='cleaned_indian_recipes.csv'):
     return IndianRecipeRecommender(recipes_path)
 
+# Initialize models (stop on error)
 try:
     detection_model, labels = load_detection_model()
     recommender = load_recommender()
@@ -92,7 +161,8 @@ image_files = st.file_uploader(
     "Upload images of your ingredients (you can select multiple)",
     type=["jpg","jpeg","png"], accept_multiple_files=True
 )
-detected_ingredients = []
+detected_original = []
+detected_normalized = []
 if image_files:
     cols = st.columns(len(image_files))
     for i, img_file in enumerate(image_files):
@@ -100,18 +170,25 @@ if image_files:
         cols[i].image(img, caption=f'Image {i+1}', width=150)
         arr = np.expand_dims(np.array(img.resize((64,64))), axis=0)
         pred = detection_model.predict(arr)
-        detected_ingredients.append(labels[np.argmax(pred)])
-    detected_ingredients = list(dict.fromkeys(detected_ingredients))  # preserve order, remove duplicates
-    st.success(f"Detected Ingredients: {', '.join(detected_ingredients)}")
+        label = labels[np.argmax(pred)]
+        detected_original.append(label)
+        detected_normalized.append(label.strip().lower())
+    # dedupe
+    seen = set()
+    detected_normalized = [x for x in detected_normalized if not (x in seen or seen.add(x))]
+    seen_orig = set()
+    detected_original = [x for x in detected_original if not (x in seen_orig or seen_orig.add(x))]
+    st.success(f"Detected Ingredients: {', '.join(detected_original)}")
 
 # --- STEP 2: INGREDIENT INPUT (FALLBACK) ---
-if detected_ingredients:
-    user_ingredients = ", ".join(detected_ingredients)
+if detected_normalized:
+    ingredients_list = detected_normalized
 else:
-    user_ingredients = st.text_input(
+    user_input = st.text_input(
         "Or enter ingredients manually (comma-separated)",
         placeholder="e.g., rice, tomato, onion"
     )
+    ingredients_list = [x.strip().lower() for x in user_input.split(",") if x.strip()]
 
 # --- SELECT NUMBER OF RECIPES ---
 top_n = st.slider("How many recipes to show?", 1, 10, 5)
@@ -123,19 +200,23 @@ with middle:
 
 # --- RECOMMENDATION LOGIC ---
 if go:
-    if not user_ingredients:
+    if not ingredients_list:
         st.warning("Please upload images or enter at least one ingredient.")
     else:
-        ingredients_list = [x.strip() for x in user_ingredients.split(",") if x.strip()]
         st.session_state.selected_recipe = None
         with st.spinner('✈️ Packing your bags...'):
-            st.session_state.results = recommender.recommend_recipes(ingredients_list, top_n=top_n)
+            st.session_state.results = recommender.recommend_recipes(
+                ingredients_list, top_n=top_n
+            )
 
 # --- DISPLAY RESULTS ---
 if st.session_state.results:
     st.success(f"🍴 Found {len(st.session_state.results)} recipes!")
     titles = [f"🍽️ {r['title']}" for r in st.session_state.results]
-    idx = st.radio("Choose a recipe:", options=range(len(titles)), format_func=lambda i: titles[i], key="sel_radio")
+    idx = st.radio(
+        "Choose a recipe:", options=range(len(titles)),
+        format_func=lambda i: titles[i], key="sel_radio"
+    )
     st.session_state.selected_recipe = idx
     if idx is not None:
         st.markdown("<hr class='recipe-divider'>", unsafe_allow_html=True)
@@ -153,5 +234,6 @@ if st.session_state.results:
         else:
             st.info("You have all required ingredients! 🎉")
         st.markdown("**Instructions:**")
-        for i, step in enumerate(r['instructions'], 1): st.write(f"{i}. {step}")
+        for i, step in enumerate(r['instructions'], 1):
+            st.write(f"{i}. {step}")
         st.markdown("</div>", unsafe_allow_html=True)
